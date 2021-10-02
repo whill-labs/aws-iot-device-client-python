@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "awsiotclient"
+version = "0.1.0"
+description = "The AWS IoT Device Client provides device-side functionality for AWS IoT services such as jobs, device shadow, and simple pubsub."
+authors = ["Seiya Shimizu <seiya.shimizu@gmail.com>"]
+license = "Apache License 2.0"
+
+[tool.poetry.dependencies]
+python = "^3.6"
+awsiotsdk = "^1.5.11"
+
+[tool.poetry.dev-dependencies]
+pysen = {version = "^0.9.1", extras = ["lint"]}
+
+[tool.pysen]
+version = "0.9"
+
+[tool.pysen.lint]
+enable_black = true
+enable_flake8 = true
+enable_isort = true
+enable_mypy = true
+mypy_preset = "strict"
+line_length = 128
+py_version = "py36"
+[[tool.pysen.lint.mypy_targets]]
+  paths = ["./src/awsiotclient"]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
