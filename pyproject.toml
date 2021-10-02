@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "awsiotclient"
-version = "0.1.0"
+version = "0.1.1"
 description = "The AWS IoT Device Client provides device-side functionality for AWS IoT services such as jobs, device shadow, and simple pubsub."
 authors = ["Seiya Shimizu <seiya.shimizu@gmail.com>"]
 license = "Apache License 2.0"
