@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "The AWS IoT Device Client provides device-side functionality for AWS IoT services such as jobs, device shadow, and simple pubsub."
 authors = ["Seiya Shimizu <seiya.shimizu@gmail.com>"]
 license = "Apache License 2.0"
+repository = "https://github.com/whill-labs/aws-iot-device-client-python"
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.6"
