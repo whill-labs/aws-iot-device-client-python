@@ -103,7 +103,7 @@ class client:
             self.try_start_next_job()
 
         except Exception as e:
-            raise (e)
+            raise ExceptionAwsIotJobs(e)
 
     def try_start_next_job(self) -> None:
         logger.debug("Trying to start the next job...")
@@ -156,7 +156,7 @@ class client:
                 logger.debug("Received Next Job Execution Changed event: ", "None. Waiting for further jobs...")
 
         except Exception as e:
-            raise (e)
+            raise ExceptionAwsIotJobs(e)
 
     def on_publish_start_next_pending_job_execution(self, future: Future) -> None:  # type: ignore
         try:
@@ -165,7 +165,7 @@ class client:
             logger.debug("Published request to start the next job.")
 
         except Exception as e:
-            raise (e)
+            raise ExceptionAwsIotJobs(e)
 
     def on_start_next_pending_job_execution_accepted(self, response):
         # type: (iotjobs.StartNextJobExecutionResponse) -> None
@@ -191,7 +191,7 @@ class client:
                 self.done_working_on_job()
 
         except Exception as e:
-            raise (e)
+            raise ExceptionAwsIotJobs(e)
 
     def on_start_next_pending_job_execution_rejected(self, rejected: iotjobs.RejectedError) -> None:
         raise ExceptionAwsIotJobs(
@@ -236,14 +236,14 @@ class client:
             logger.debug("Published request to update job.")
 
         except Exception as e:
-            raise (e)
+            raise ExceptionAwsIotJobs(e)
 
     def on_update_job_execution_accepted(self, response: iotjobs.UpdateJobExecutionResponse) -> None:
         try:
             logger.debug("Request to update job was accepted.")
             self.done_working_on_job()
         except Exception as e:
-            raise (e)
+            raise ExceptionAwsIotJobs(e)
 
     def on_update_job_execution_rejected(self, rejected: iotjobs.RejectedError) -> None:
         raise ExceptionAwsIotJobs(
