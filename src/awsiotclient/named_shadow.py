@@ -194,12 +194,12 @@ class client:
             logger.error("Failed to publish update request.")
             raise (e)
 
-    def on_update_named_shadow_accepted(self, response):
-        # type: (iotshadow.UpdateNamedShadowResponse) -> None
+    def on_update_named_shadow_accepted(self, response: iotshadow.UpdateNamedShadowResponse) -> None:
         try:
             if response.state.reported:
                 logger.debug("Finished updating reported shadow value to '{}'.".format(response.state.reported))
             if response.state.desired:
+                self.locked_data.desired_value = response.state.desired
                 logger.debug("Finished updating desired shadow value to '{}'.".format(response.state.desired))
         except Exception as e:
             logger.error(format_exc())
