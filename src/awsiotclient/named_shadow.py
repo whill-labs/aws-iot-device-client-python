@@ -199,7 +199,8 @@ class client:
             logger.error("Failed to publish update request.")
             raise (e)
 
-    def on_update_named_shadow_accepted(self, response: iotshadow.UpdateNamedShadowResponse) -> None:
+    def on_update_named_shadow_accepted(self, response):
+        # type: (iotshadow.UpdateNamedShadowResponse) -> None
         try:
             if response.state.reported:
                 logger.debug("Finished updating reported shadow value to '{}'.".format(response.state.reported))
