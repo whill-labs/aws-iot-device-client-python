@@ -45,17 +45,17 @@ class client:
         shadow_name: str,
         qos: mqtt.QoS = mqtt.QoS.AT_LEAST_ONCE,
         delta_func: Callable[[str, str, Dict[str, Any]], None] = empty_func,
+        desired_func: Callable[[str, str, Dict[str, Any]], None] = empty_func,
         publish_full_doc: bool = False,
-        use_desired_in_delta_func: bool = False,
     ) -> None:
         self.client = iotshadow.IotShadowClient(connection)
         self.thing_name = thing_name
         self.shadow_name = shadow_name
         self.locked_data = LockedData()
         self.delta_func = delta_func
+        self.desired_func = desired_func
         self.qos = qos
         self.publish_full_doc = publish_full_doc
-        self.use_desired_in_delta_func = use_desired_in_delta_func
         try:
             # Subscribe to necessary topics.
             # Note that **is** important to wait for "accepted/rejected" subscriptions
@@ -173,10 +173,7 @@ class client:
                 else:
                     logger.debug("  Delta reports that desired value is '{}'. Invoke delta func...".format(value))
                     try:
-                        if self.use_desired_in_delta_func:
-                            self.delta_func(self.thing_name, self.shadow_name, self.locked_data.desired_value)
-                        else:
-                            self.delta_func(self.thing_name, self.shadow_name, value)
+                        self.delta_func(self.thing_name, self.shadow_name, value)
                     except ExceptionAwsIotNamedShadowInvalidDelta:
                         logger.debug(f"  Delta reports invalid request in {self.shadow_name}. Resetting defaults...")
                         for key in value:
@@ -206,6 +203,7 @@ class client:
                 logger.debug("Finished updating reported shadow value to '{}'.".format(response.state.reported))
             if response.state.desired:
                 self.locked_data.desired_value = response.state.desired
+                self.desired_func(self.thing_name, self.shadow_name, self.locked_data.desired_value)
                 logger.debug("Finished updating desired shadow value to '{}'.".format(response.state.desired))
         except Exception as e:
             logger.error(format_exc())
