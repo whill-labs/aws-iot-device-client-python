@@ -46,6 +46,7 @@ class client:
         qos: mqtt.QoS = mqtt.QoS.AT_LEAST_ONCE,
         delta_func: Callable[[str, str, Dict[str, Any]], None] = empty_func,
         publish_full_doc: bool = False,
+        use_desired_in_delta_func: bool = False,
     ) -> None:
         self.client = iotshadow.IotShadowClient(connection)
         self.thing_name = thing_name
@@ -54,6 +55,7 @@ class client:
         self.delta_func = delta_func
         self.qos = qos
         self.publish_full_doc = publish_full_doc
+        self.use_desired_in_delta_func = use_desired_in_delta_func
         try:
             # Subscribe to necessary topics.
             # Note that **is** important to wait for "accepted/rejected" subscriptions
@@ -171,7 +173,10 @@ class client:
                 else:
                     logger.debug("  Delta reports that desired value is '{}'. Invoke delta func...".format(value))
                     try:
-                        self.delta_func(self.thing_name, self.shadow_name, value)
+                        if self.use_desired_in_delta_func:
+                            self.delta_func(self.thing_name, self.shadow_name, self.locked_data.desired_value)
+                        else:
+                            self.delta_func(self.thing_name, self.shadow_name, value)
                     except ExceptionAwsIotNamedShadowInvalidDelta:
                         logger.debug(f"  Delta reports invalid request in {self.shadow_name}. Resetting defaults...")
                         for key in value:
