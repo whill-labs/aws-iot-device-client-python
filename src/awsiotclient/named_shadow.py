@@ -202,8 +202,9 @@ class client:
             if response.state.reported:
                 logger.debug("Finished updating reported shadow value to '{}'.".format(response.state.reported))
             if response.state.desired:
-                self.locked_data.desired_value = response.state.desired
-                self.desired_func(self.thing_name, self.shadow_name, self.locked_data.desired_value)
+                new_value: Dict[str, Any] = response.state.desired
+                self.locked_data.desired_value = new_value
+                self.desired_func(self.thing_name, self.shadow_name, new_value)
                 logger.debug("Finished updating desired shadow value to '{}'.".format(response.state.desired))
         except Exception as e:
             logger.error(format_exc())
