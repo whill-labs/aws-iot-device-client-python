@@ -45,6 +45,7 @@ class client:
         shadow_name: str,
         qos: mqtt.QoS = mqtt.QoS.AT_LEAST_ONCE,
         delta_func: Callable[[str, str, Dict[str, Any]], None] = empty_func,
+        desired_func: Callable[[str, str, Dict[str, Any]], None] = empty_func,
         publish_full_doc: bool = False,
     ) -> None:
         self.client = iotshadow.IotShadowClient(connection)
@@ -52,6 +53,7 @@ class client:
         self.shadow_name = shadow_name
         self.locked_data = LockedData()
         self.delta_func = delta_func
+        self.desired_func = desired_func
         self.qos = qos
         self.publish_full_doc = publish_full_doc
         try:
@@ -200,6 +202,9 @@ class client:
             if response.state.reported:
                 logger.debug("Finished updating reported shadow value to '{}'.".format(response.state.reported))
             if response.state.desired:
+                new_value: Dict[str, Any] = response.state.desired
+                self.locked_data.desired_value = new_value
+                self.desired_func(self.thing_name, self.shadow_name, new_value)
                 logger.debug("Finished updating desired shadow value to '{}'.".format(response.state.desired))
         except Exception as e:
             logger.error(format_exc())
