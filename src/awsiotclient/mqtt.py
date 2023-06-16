@@ -17,14 +17,21 @@ class ExceptionAwsIotMqtt(ExceptionAwsIotClient):
         super().__init__(*args)
 
 
-def on_connection_interrupted(connection: mqtt.Connection, error: exceptions.AwsCrtError, **kwargs: KwArgs) -> None:
+def on_connection_interrupted(
+    connection: mqtt.Connection, error: exceptions.AwsCrtError, **kwargs: KwArgs
+) -> None:
     logger.debug(f"Connection interrupted. error: {error}")
 
 
 def on_connection_resumed(
-    connection: mqtt.Connection, return_code: mqtt.ConnectReturnCode, session_present: bool, **kwargs: KwArgs
+    connection: mqtt.Connection,
+    return_code: mqtt.ConnectReturnCode,
+    session_present: bool,
+    **kwargs: KwArgs,
 ) -> None:
-    logger.debug(f"Connection resumed. return_code: {return_code} session_present: {session_present}")
+    logger.debug(
+        f"Connection resumed. return_code: {return_code} session_present: {session_present}"
+    )
 
     if return_code == mqtt.ConnectReturnCode.ACCEPTED and not session_present:
         logger.debug("Session did not persist. Resubscribing to existing topics...")
@@ -42,7 +49,9 @@ def on_resubscribe_complete(resubscribe_future: Future) -> None:  # type: ignore
 
     for topic, qos in resubscribe_results["topics"]:
         if qos is None:
-            raise (ExceptionAwsIotMqtt(f"Server rejected resubscribe to topic: {topic}"))
+            raise (
+                ExceptionAwsIotMqtt(f"Server rejected resubscribe to topic: {topic}")
+            )
 
 
 class ConnectionParams:
@@ -78,9 +87,13 @@ def init(params: ConnectionParams) -> mqtt.Connection:
     if params.use_websocket:
         proxy_options = None
         if params.proxy_host:
-            proxy_options = http.HttpProxyOptions(host_name=params.proxy_host, port=params.proxy_port)
+            proxy_options = http.HttpProxyOptions(
+                host_name=params.proxy_host, port=params.proxy_port
+            )
 
-        credentials_provider = auth.AwsCredentialsProvider.new_default_chain(client_bootstrap=client_bootstrap)
+        credentials_provider = auth.AwsCredentialsProvider.new_default_chain(
+            client_bootstrap=client_bootstrap
+        )
         mqtt_connection = mqtt_connection_builder.websockets_with_default_aws_signing(
             endpoint=params.endpoint,
             client_bootstrap=client_bootstrap,
@@ -109,6 +122,10 @@ def init(params: ConnectionParams) -> mqtt.Connection:
             keep_alive_secs=6,
         )
 
-    logger.debug("Connecting to {} with client ID '{}'...".format(params.endpoint, params.client_id))
+    logger.debug(
+        "Connecting to {} with client ID '{}'...".format(
+            params.endpoint, params.client_id
+        )
+    )
 
     return mqtt_connection

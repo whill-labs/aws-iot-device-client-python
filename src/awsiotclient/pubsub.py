@@ -2,12 +2,15 @@ import json
 from typing import Any, Callable, Dict, Optional
 
 from awscrt import mqtt
+
 from awsiotclient import get_module_logger
 
 logger = get_module_logger(__name__)
 
 
-def empty_func(topic: str, payload: Optional[Dict[str, Any]], **kwargs: Optional[Dict[str, Any]]) -> None:
+def empty_func(
+    topic: str, payload: Optional[Dict[str, Any]], **kwargs: Optional[Dict[str, Any]]
+) -> None:
     logger.debug(f"empty_func: {topic}, {payload}")
 
 
@@ -20,7 +23,9 @@ class Subscriber:
         callback: Callable[[str, Optional[Dict[str, Any]]], None] = empty_func,
     ):
         self.callback = callback
-        self.future, self.packet_id = connection.subscribe(topic=topic, qos=qos, callback=self.on_message_received)
+        self.future, self.packet_id = connection.subscribe(
+            topic=topic, qos=qos, callback=self.on_message_received
+        )
 
         self.result = self.future.result()
         logger.debug(f"Subscribed with {str(self.result['qos'])}")
@@ -32,7 +37,12 @@ class Subscriber:
 
 
 class Publisher:
-    def __init__(self, connection: mqtt.Connection, topic: str, qos: mqtt.QoS = mqtt.QoS.AT_LEAST_ONCE):
+    def __init__(
+        self,
+        connection: mqtt.Connection,
+        topic: str,
+        qos: mqtt.QoS = mqtt.QoS.AT_LEAST_ONCE,
+    ):
         self.connection = connection
         self.topic = topic
         self.qos = qos
@@ -40,6 +50,8 @@ class Publisher:
     def publish(self, payload: Optional[Dict[str, Any]]) -> None:
         if payload:
             logger.debug(f"Publishing message to topic '{self.topic}': {payload}")
-            self.connection.publish(topic=self.topic, payload=json.dumps(payload), qos=self.qos)
+            self.connection.publish(
+                topic=self.topic, payload=json.dumps(payload), qos=self.qos
+            )
         else:
             logger.debug(f"Empty payload. Nothing will be publshed to '{self.topic}'")
