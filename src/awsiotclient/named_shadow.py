@@ -28,6 +28,12 @@ def empty_func(thing_name: str, shadow_name: str, value: Dict[str, Any]) -> None
     )
 
 
+def done_future() -> "Future[None]":
+    future: "Future[None]" = Future()
+    future.set_result(None)
+    return future
+
+
 SHADOW_VALUE_DEFAULT = None
 
 
@@ -290,11 +296,11 @@ class client:
         with self.locked_data.lock:
             self.locked_data.reported_value = reported_value
 
-    def change_reported_value(self, value: ShadowDocument) -> None:
+    def change_reported_value(self, value: ShadowDocument) -> "Future[None]":
         with self.locked_data.lock:
             if self.locked_data.reported_value == value:
                 logger.debug("Local value is already '{}'.".format(value))
-                return
+                return done_future()
 
             if self.publish_full_doc:
                 reported = value
@@ -311,14 +317,18 @@ class client:
                 reported=reported,
             ),
         )
-        future = self.client.publish_update_named_shadow(request, self.qos)
+        future: "Future[None]" = self.client.publish_update_named_shadow(
+            request, self.qos
+        )
         future.add_done_callback(self.on_publish_update_named_shadow)
 
-    def change_desired_value(self, value: ShadowDocument) -> None:
+        return future
+
+    def change_desired_value(self, value: ShadowDocument) -> "Future[None]":
         with self.locked_data.lock:
             if self.locked_data.desired_value == value:
                 logger.debug("Local desired value is already '{}'.".format(value))
-                return
+                return done_future()
             if self.publish_full_doc:
                 desired = value
             else:
@@ -334,19 +344,23 @@ class client:
                 desired=desired,
             ),
         )
-        future = self.client.publish_update_named_shadow(request, self.qos)
+        future: "Future[None]" = self.client.publish_update_named_shadow(
+            request, self.qos
+        )
         future.add_done_callback(self.on_publish_update_named_shadow)
+
+        return future
 
     def change_both_values(
         self, desired_value: ShadowDocument, reported_value: ShadowDocument
-    ) -> None:
+    ) -> "Future[None]":
         with self.locked_data.lock:
             if (
                 self.locked_data.desired_value == desired_value
                 and self.locked_data.reported_value == reported_value
             ):
                 logger.debug("Both of desired and reported values are unchanged.")
-                return
+                return done_future()
             if self.publish_full_doc:
                 desired = desired_value
                 reported = reported_value
@@ -371,8 +385,12 @@ class client:
                 reported=reported,
             ),
         )
-        future = self.client.publish_update_named_shadow(request, self.qos)
+        future: "Future[None]" = self.client.publish_update_named_shadow(
+            request, self.qos
+        )
         future.add_done_callback(self.on_publish_update_named_shadow)
+
+        return future
 
     def get_reported_value(self) -> ShadowDocument:
         return self.locked_data.reported_value

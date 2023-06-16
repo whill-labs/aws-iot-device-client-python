@@ -28,6 +28,12 @@ def empty_func(thing_name: str, shadow_property: str, value: ShadowDocument) -> 
     )
 
 
+def done_future() -> "Future[None]":
+    future: "Future[None]" = Future()
+    future.set_result(None)
+    return future
+
+
 SHADOW_VALUE_DEFAULT = None
 
 
@@ -280,11 +286,11 @@ class client:
         with self.locked_data.lock:
             self.locked_data.shadow_value = reported_value
 
-    def change_reported_value(self, value: ShadowDocument) -> None:
+    def change_reported_value(self, value: ShadowDocument) -> "Future[None]":
         with self.locked_data.lock:
             if self.locked_data.shadow_value == value:
                 logger.debug("Local value is already '{}'.".format(value))
-                return
+                return done_future()
 
             if self.publish_full_doc:
                 reported = value
@@ -301,14 +307,16 @@ class client:
                 reported={self.shadow_property: reported},
             ),
         )
-        future = self.client.publish_update_shadow(request, self.qos)
+        future: "Future[None]" = self.client.publish_update_shadow(request, self.qos)
         future.add_done_callback(self.on_publish_update_shadow)
 
-    def change_desired_value(self, value: ShadowDocument) -> None:
+        return future
+
+    def change_desired_value(self, value: ShadowDocument) -> "Future[None]":
         with self.locked_data.lock:
             if self.locked_data.desired_value == value:
                 logger.debug("Local desired value is already '{}'.".format(value))
-                return
+                return done_future()
 
             if self.publish_full_doc:
                 desired = value
@@ -325,5 +333,7 @@ class client:
                 desired={self.shadow_property: desired},
             ),
         )
-        future = self.client.publish_update_shadow(request, self.qos)
+        future: "Future[None]" = self.client.publish_update_shadow(request, self.qos)
         future.add_done_callback(self.on_publish_update_shadow)
+
+        return future

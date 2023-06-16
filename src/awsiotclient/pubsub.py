@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import Future
 from typing import Any, Callable, Dict, Optional
 
 from awscrt import mqtt
@@ -47,11 +48,15 @@ class Publisher:
         self.topic = topic
         self.qos = qos
 
-    def publish(self, payload: Optional[Dict[str, Any]]) -> None:
+    def publish(self, payload: Optional[Dict[str, Any]]) -> "Future[Any]":
         if payload:
             logger.debug(f"Publishing message to topic '{self.topic}': {payload}")
-            self.connection.publish(
+            future, _ = self.connection.publish(
                 topic=self.topic, payload=json.dumps(payload), qos=self.qos
             )
         else:
             logger.debug(f"Empty payload. Nothing will be publshed to '{self.topic}'")
+            future = Future()
+            future.set_result(None)
+
+        return future
