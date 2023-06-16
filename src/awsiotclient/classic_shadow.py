@@ -23,7 +23,9 @@ class ExceptionAwsIotClassicShadowInvalidDelta(ExceptionAwsIotClassicShadow):
 
 
 def empty_func(thing_name: str, shadow_property: str, value: ShadowDocument) -> None:
-    logger.debug(f"empty func. thing_name: {thing_name}, property: {shadow_property}, value: {value}")
+    logger.debug(
+        f"empty func. thing_name: {thing_name}, property: {shadow_property}, value: {value}"
+    )
 
 
 SHADOW_VALUE_DEFAULT = None
@@ -59,8 +61,13 @@ class client:
             # Note that **is** important to wait for "accepted/rejected" subscriptions
             # to succeed before publishing the corresponding "request".
             logger.debug("Subscribing to Delta events...")
-            (delta_subscribed_future, _,) = self.client.subscribe_to_shadow_delta_updated_events(
-                request=iotshadow.ShadowDeltaUpdatedSubscriptionRequest(thing_name=thing_name),
+            (
+                delta_subscribed_future,
+                _,
+            ) = self.client.subscribe_to_shadow_delta_updated_events(
+                request=iotshadow.ShadowDeltaUpdatedSubscriptionRequest(
+                    thing_name=thing_name
+                ),
                 qos=qos,
                 callback=self.on_shadow_delta_updated,
             )
@@ -69,14 +76,24 @@ class client:
             delta_subscribed_future.result()
 
             logger.debug("Subscribing to Update responses...")
-            (update_accepted_subscribed_future, _,) = self.client.subscribe_to_update_shadow_accepted(
-                request=iotshadow.UpdateShadowSubscriptionRequest(thing_name=thing_name),
+            (
+                update_accepted_subscribed_future,
+                _,
+            ) = self.client.subscribe_to_update_shadow_accepted(
+                request=iotshadow.UpdateShadowSubscriptionRequest(
+                    thing_name=thing_name
+                ),
                 qos=qos,
                 callback=self.on_update_shadow_accepted,
             )
 
-            (update_rejected_subscribed_future, _,) = self.client.subscribe_to_update_shadow_rejected(
-                request=iotshadow.UpdateShadowSubscriptionRequest(thing_name=thing_name),
+            (
+                update_rejected_subscribed_future,
+                _,
+            ) = self.client.subscribe_to_update_shadow_rejected(
+                request=iotshadow.UpdateShadowSubscriptionRequest(
+                    thing_name=thing_name
+                ),
                 qos=qos,
                 callback=self.on_update_shadow_rejected,
             )
@@ -86,13 +103,19 @@ class client:
             update_rejected_subscribed_future.result()
 
             logger.debug("Subscribing to Get responses...")
-            (get_accepted_subscribed_future, _,) = self.client.subscribe_to_get_shadow_accepted(
+            (
+                get_accepted_subscribed_future,
+                _,
+            ) = self.client.subscribe_to_get_shadow_accepted(
                 request=iotshadow.GetShadowSubscriptionRequest(thing_name=thing_name),
                 qos=qos,
                 callback=self.on_get_shadow_accepted,
             )
 
-            (get_rejected_subscribed_future, _,) = self.client.subscribe_to_get_shadow_rejected(
+            (
+                get_rejected_subscribed_future,
+                _,
+            ) = self.client.subscribe_to_get_shadow_rejected(
                 request=iotshadow.GetShadowSubscriptionRequest(thing_name=thing_name),
                 qos=qos,
                 callback=self.on_get_shadow_rejected,
@@ -125,24 +148,36 @@ class client:
 
             with self.locked_data.lock:
                 if self.locked_data.shadow_value is not None:
-                    logger.debug("  Ignoring initial query because a delta event has already been received.")
+                    logger.debug(
+                        "  Ignoring initial query because a delta event has already been received."
+                    )
                     return
 
             if response.state:
                 if response.state.delta:
                     value = response.state.delta.get(self.shadow_property)
                     if value:
-                        logger.debug("  Shadow contains delta value '{}'.".format(value))
+                        logger.debug(
+                            "  Shadow contains delta value '{}'.".format(value)
+                        )
                         return
 
                 if response.state.reported:
                     value = response.state.reported.get(self.shadow_property)
                     if value:
-                        logger.debug("  Shadow contains reported value '{}'.".format(value))
-                        self.set_local_value_due_to_initial_query(response.state.reported[self.shadow_property])
+                        logger.debug(
+                            "  Shadow contains reported value '{}'.".format(value)
+                        )
+                        self.set_local_value_due_to_initial_query(
+                            response.state.reported[self.shadow_property]
+                        )
                         return
 
-            logger.debug("  Shadow document lacks '{}' property. Setting defaults...".format(self.shadow_property))
+            logger.debug(
+                "  Shadow document lacks '{}' property. Setting defaults...".format(
+                    self.shadow_property
+                )
+            )
             self.change_reported_value(SHADOW_VALUE_DEFAULT)
             return
 
@@ -157,7 +192,9 @@ class client:
             self.change_reported_value(SHADOW_VALUE_DEFAULT)
         else:
             raise ExceptionAwsIotClassicShadow(
-                "Get request was rejected. code:{} message:'{}'".format(error.code, error.message)
+                "Get request was rejected. code:{} message:'{}'".format(
+                    error.code, error.message
+                )
             )
 
     def on_shadow_delta_updated(self, delta):
@@ -167,20 +204,34 @@ class client:
             if delta.state and (self.shadow_property in delta.state):
                 value = delta.state[self.shadow_property]
                 if value is None:
-                    logger.debug("  Delta reports that '{}' was deleted. Resetting defaults...".format(self.shadow_property))
+                    logger.debug(
+                        "  Delta reports that '{}' was deleted. Resetting defaults...".format(
+                            self.shadow_property
+                        )
+                    )
                     self.change_reported_value(SHADOW_VALUE_DEFAULT)
                     return
                 else:
-                    logger.debug("  Delta reports that desired value is '{}'. Invoke delta func...".format(value))
+                    logger.debug(
+                        "  Delta reports that desired value is '{}'. Invoke delta func...".format(
+                            value
+                        )
+                    )
                     try:
                         self.delta_func(self.thing_name, self.shadow_property, value)
                     except ExceptionAwsIotClassicShadowInvalidDelta:
                         logger.debug(
-                            "  Delta reports invalid request in {}. Resetting defaults...".format(self.shadow_property)
+                            "  Delta reports invalid request in {}. Resetting defaults...".format(
+                                self.shadow_property
+                            )
                         )
                         self.change_desired_value(SHADOW_VALUE_DEFAULT)
             else:
-                logger.debug("  Delta did not report a change in '{}'".format(self.shadow_property))
+                logger.debug(
+                    "  Delta did not report a change in '{}'".format(
+                        self.shadow_property
+                    )
+                )
 
         except Exception as e:
             logger.error(format_exc())
@@ -199,9 +250,17 @@ class client:
         # type: (iotshadow.UpdateShadowResponse) -> None
         try:
             if response.state.reported:
-                logger.debug("Finished updating reported shadow value to '{}'.".format(response.state.reported))
+                logger.debug(
+                    "Finished updating reported shadow value to '{}'.".format(
+                        response.state.reported
+                    )
+                )
             if response.state.desired:
-                logger.debug("Finished updating desired shadow value to '{}'.".format(response.state.desired))
+                logger.debug(
+                    "Finished updating desired shadow value to '{}'.".format(
+                        response.state.desired
+                    )
+                )
         except Exception as e:
             logger.error(format_exc())
             logger.error("Updated shadow is missing the target property.")
@@ -209,11 +268,15 @@ class client:
 
     def on_update_shadow_rejected(self, error):
         # type: (iotshadow.ErrorResponse) -> None
-        errstr = "Update request was rejected. code:{} message:'{}'".format(error.code, error.message)
+        errstr = "Update request was rejected. code:{} message:'{}'".format(
+            error.code, error.message
+        )
         logger.error(errstr)
         raise ExceptionAwsIotClient(errstr)
 
-    def set_local_value_due_to_initial_query(self, reported_value: ShadowDocument) -> None:
+    def set_local_value_due_to_initial_query(
+        self, reported_value: ShadowDocument
+    ) -> None:
         with self.locked_data.lock:
             self.locked_data.shadow_value = reported_value
 

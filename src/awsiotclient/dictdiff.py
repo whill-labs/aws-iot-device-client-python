@@ -6,7 +6,9 @@ from . import get_module_logger
 logger = get_module_logger(__name__)
 
 
-def dictdiff(s1: Optional[Dict[Any, Any]], s2: Optional[Dict[Any, Any]]) -> Optional[Dict[Any, Any]]:
+def dictdiff(
+    s1: Optional[Dict[Any, Any]], s2: Optional[Dict[Any, Any]]
+) -> Optional[Dict[Any, Any]]:
     if not s2 or s1 == s2:
         return None
     if not s1:

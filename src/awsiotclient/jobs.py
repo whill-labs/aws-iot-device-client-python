@@ -48,8 +48,15 @@ class client:
         self.job_func = job_func
 
         try:
-            changed_subscription_request = iotjobs.NextJobExecutionChangedSubscriptionRequest(thing_name=thing_name)
-            (subscribed_future, _,) = self.client.subscribe_to_next_job_execution_changed_events(
+            changed_subscription_request = (
+                iotjobs.NextJobExecutionChangedSubscriptionRequest(
+                    thing_name=thing_name
+                )
+            )
+            (
+                subscribed_future,
+                _,
+            ) = self.client.subscribe_to_next_job_execution_changed_events(
                 request=changed_subscription_request,
                 qos=qos,
                 callback=self.on_next_job_execution_changed,
@@ -59,14 +66,24 @@ class client:
             subscribed_future.result()
 
             logger.debug("Subscribing to Start responses...")
-            start_subscription_request = iotjobs.StartNextPendingJobExecutionSubscriptionRequest(thing_name=thing_name)
-            (subscribed_accepted_future, _,) = self.client.subscribe_to_start_next_pending_job_execution_accepted(
+            start_subscription_request = (
+                iotjobs.StartNextPendingJobExecutionSubscriptionRequest(
+                    thing_name=thing_name
+                )
+            )
+            (
+                subscribed_accepted_future,
+                _,
+            ) = self.client.subscribe_to_start_next_pending_job_execution_accepted(
                 request=start_subscription_request,
                 qos=qos,
                 callback=self.on_start_next_pending_job_execution_accepted,
             )
 
-            (subscribed_rejected_future, _,) = self.client.subscribe_to_start_next_pending_job_execution_rejected(
+            (
+                subscribed_rejected_future,
+                _,
+            ) = self.client.subscribe_to_start_next_pending_job_execution_rejected(
                 request=start_subscription_request,
                 qos=qos,
                 callback=self.on_start_next_pending_job_execution_rejected,
@@ -79,15 +96,23 @@ class client:
             logger.debug("Subscribing to Update responses...")
             # Note that we subscribe to "+", the MQTT wildcard, to receive
             # responses about any job-ID.
-            update_subscription_request = iotjobs.UpdateJobExecutionSubscriptionRequest(thing_name=thing_name, job_id="+")
+            update_subscription_request = iotjobs.UpdateJobExecutionSubscriptionRequest(
+                thing_name=thing_name, job_id="+"
+            )
 
-            (subscribed_accepted_future, _,) = self.client.subscribe_to_update_job_execution_accepted(
+            (
+                subscribed_accepted_future,
+                _,
+            ) = self.client.subscribe_to_update_job_execution_accepted(
                 request=update_subscription_request,
                 qos=qos,
                 callback=self.on_update_job_execution_accepted,
             )
 
-            (subscribed_rejected_future, _,) = self.client.subscribe_to_update_job_execution_rejected(
+            (
+                subscribed_rejected_future,
+                _,
+            ) = self.client.subscribe_to_update_job_execution_rejected(
                 request=update_subscription_request,
                 qos=qos,
                 callback=self.on_update_job_execution_rejected,
@@ -120,9 +145,15 @@ class client:
             self.locked_data.is_next_job_waiting = False
 
         logger.debug("Publishing request to start next job...")
-        request = iotjobs.StartNextPendingJobExecutionRequest(thing_name=self.thing_name)
-        publish_future = self.client.publish_start_next_pending_job_execution(request, self.qos)
-        publish_future.add_done_callback(self.on_publish_start_next_pending_job_execution)
+        request = iotjobs.StartNextPendingJobExecutionRequest(
+            thing_name=self.thing_name
+        )
+        publish_future = self.client.publish_start_next_pending_job_execution(
+            request, self.qos
+        )
+        publish_future.add_done_callback(
+            self.on_publish_start_next_pending_job_execution
+        )
 
     def done_working_on_job(self) -> None:
         with self.locked_data.lock:
@@ -132,13 +163,17 @@ class client:
         if try_again:
             self.try_start_next_job()
 
-    def on_next_job_execution_changed(self, event: iotjobs.NextJobExecutionChangedEvent) -> None:
+    def on_next_job_execution_changed(
+        self, event: iotjobs.NextJobExecutionChangedEvent
+    ) -> None:
         try:
             execution = event.execution
             if execution:
                 logger.debug(
                     "Received Next Job Execution Changed event. ",
-                    "job_id:{} job_document:{}".format(execution.job_id, execution.job_document),
+                    "job_id:{} job_document:{}".format(
+                        execution.job_id, execution.job_document
+                    ),
                 )
 
                 # Start job now, or remember to start it when current job is done
@@ -153,7 +188,10 @@ class client:
                     self.try_start_next_job()
 
             else:
-                logger.debug("Received Next Job Execution Changed event: ", "None. Waiting for further jobs...")
+                logger.debug(
+                    "Received Next Job Execution Changed event: ",
+                    "None. Waiting for further jobs...",
+                )
 
         except Exception as e:
             raise ExceptionAwsIotJobs(e)
@@ -180,22 +218,29 @@ class client:
 
                 # To emulate working on a job, spawn a thread that sleeps for a few seconds
                 job_thread = threading.Thread(
-                    target=lambda: self.job_thread_fn(execution.job_id, execution.job_document),
+                    target=lambda: self.job_thread_fn(
+                        execution.job_id, execution.job_document
+                    ),
                     name="job_thread",
                 )
                 job_thread.start()
             else:
                 logger.debug(
-                    "Request to start next job was accepted, but there are no jobs to be done.", " Waiting for further jobs..."
+                    "Request to start next job was accepted, but there are no jobs to be done.",
+                    " Waiting for further jobs...",
                 )
                 self.done_working_on_job()
 
         except Exception as e:
             raise ExceptionAwsIotJobs(e)
 
-    def on_start_next_pending_job_execution_rejected(self, rejected: iotjobs.RejectedError) -> None:
+    def on_start_next_pending_job_execution_rejected(
+        self, rejected: iotjobs.RejectedError
+    ) -> None:
         raise ExceptionAwsIotJobs(
-            "Request to start next pending job rejected with code:'{}' message:'{}'".format(rejected.code, rejected.message)
+            "Request to start next pending job rejected with code:'{}' message:'{}'".format(
+                rejected.code, rejected.message
+            )
         )
 
     def job_thread_fn(self, job_id: str, job_document: JobDocument) -> None:
@@ -204,7 +249,9 @@ class client:
             self.job_func(job_id, job_document)
             logger.debug("Done working on job.")
         except ExceptionAwsIotJobsUserDefinedFailure as e:
-            logger.debug("Report that job excecution failed due to user-defined reason...")
+            logger.debug(
+                "Report that job excecution failed due to user-defined reason..."
+            )
             request = iotjobs.UpdateJobExecutionRequest(
                 thing_name=self.thing_name,
                 job_id=job_id,
@@ -238,7 +285,9 @@ class client:
         except Exception as e:
             raise ExceptionAwsIotJobs(e)
 
-    def on_update_job_execution_accepted(self, response: iotjobs.UpdateJobExecutionResponse) -> None:
+    def on_update_job_execution_accepted(
+        self, response: iotjobs.UpdateJobExecutionResponse
+    ) -> None:
         try:
             logger.debug("Request to update job was accepted.")
             self.done_working_on_job()
@@ -247,5 +296,7 @@ class client:
 
     def on_update_job_execution_rejected(self, rejected: iotjobs.RejectedError) -> None:
         raise ExceptionAwsIotJobs(
-            "Request to update job status was rejected. code:'{}' message:'{}'.".format(rejected.code, rejected.message)
+            "Request to update job status was rejected. code:'{}' message:'{}'.".format(
+                rejected.code, rejected.message
+            )
         )
