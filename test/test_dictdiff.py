@@ -38,6 +38,7 @@ class DictdiffTestCase(unittest.TestCase):
         out = dictdiff(from_dict, to_dict)
 
         self.assertEqual(out, self.COMMON_DICT)
+        self.assertIsNot(out, to_dict)
 
     def test_dictdiff_to_empty(self):
         from_dict = deepcopy(self.COMMON_DICT)
