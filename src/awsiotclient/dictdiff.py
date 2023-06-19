@@ -20,20 +20,18 @@ def dictdiff(
         v2 = s2.get(k)
         if v1 == v2:
             continue  # Not changed
+
         if v1 is None:
             logger.debug(f"Added Item ({k})  : None -> {v2}")
             dst[k] = deepcopy(v2)
             continue
+
         if v2 is None:
             logger.debug(f"Removed Item ({k}): {v1} -> None")
             dst[k] = None  # Removed Item
             continue
-        if type(v1) != type(v2):
-            dst[k] = deepcopy(v2)  # Type changed. Override.
-            continue
 
-        # here, v1 != v2 and type(v1) == type(v2)
-        if isinstance(v1, dict):
+        if isinstance(v1, dict) and isinstance(v2, dict):
             dst[k] = dictdiff(v1, v2)
         else:
             logger.debug(f"Updated Item ({k}): {v1} -> {v2}")
