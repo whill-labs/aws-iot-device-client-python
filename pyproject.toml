@@ -8,7 +8,7 @@ repository = "https://github.com/whill-labs/aws-iot-device-client-python"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.6"
+python = "^3.7.1"
 awsiotsdk = "^1.5.11"
 
 [tool.poetry.dev-dependencies]
