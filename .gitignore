@@ -1,3 +1,6 @@
+!test/certs/AmazonRootCA1.pem
+test/certs/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
