@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from awsiotclient import jobs
 import boto3
+from botocore.config import Config
 
 
 from .common import init_connection
@@ -18,10 +19,11 @@ class TestJobs(unittest.TestCase):
         pass
 
     def test_jobs(self):
-        client = boto3.client("iot")
+        region = environ["AWS_REGION"]
+
+        client = boto3.client("iot", config=Config(region_name=region))
 
         job_id = f"jobs-test-{uuid4()}"
-        region = environ["AWS_REGION"]
         account = environ["AWS_ACCOUNT_ID"]
         target = f"arn:aws:iot:{region}:{account}:thing/{self.THING_NAME}"
         template = f"arn:aws:iot:{region}::jobtemplate/AWS-Run-Command:1.0"
