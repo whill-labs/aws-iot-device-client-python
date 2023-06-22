@@ -67,85 +67,64 @@ class client:
             # Note that **is** important to wait for "accepted/rejected" subscriptions
             # to succeed before publishing the corresponding "request".
             logger.debug("Subscribing to Delta events...")
-            (
-                delta_subscribed_future,
-                _,
-            ) = self.client.subscribe_to_shadow_delta_updated_events(
+            self.client.subscribe_to_shadow_delta_updated_events(
                 request=iotshadow.ShadowDeltaUpdatedSubscriptionRequest(
                     thing_name=thing_name
                 ),
                 qos=qos,
                 callback=self.on_shadow_delta_updated,
-            )
+            )[0].result()
 
-            # Wait for subscription to succeed
-            delta_subscribed_future.result()
-
-            logger.debug("Subscribing to Update responses...")
-            (
-                update_accepted_subscribed_future,
-                _,
-            ) = self.client.subscribe_to_update_shadow_accepted(
-                request=iotshadow.UpdateShadowSubscriptionRequest(
-                    thing_name=thing_name
-                ),
-                qos=qos,
-                callback=self.on_update_shadow_accepted,
-            )
-
-            (
-                update_rejected_subscribed_future,
-                _,
-            ) = self.client.subscribe_to_update_shadow_rejected(
-                request=iotshadow.UpdateShadowSubscriptionRequest(
-                    thing_name=thing_name
-                ),
-                qos=qos,
-                callback=self.on_update_shadow_rejected,
-            )
-
-            # Wait for subscriptions to succeed
-            update_accepted_subscribed_future.result()
-            update_rejected_subscribed_future.result()
-
-            logger.debug("Subscribing to Get responses...")
-            (
-                get_accepted_subscribed_future,
-                _,
-            ) = self.client.subscribe_to_get_shadow_accepted(
-                request=iotshadow.GetShadowSubscriptionRequest(thing_name=thing_name),
-                qos=qos,
-                callback=self.on_get_shadow_accepted,
-            )
-
-            (
-                get_rejected_subscribed_future,
-                _,
-            ) = self.client.subscribe_to_get_shadow_rejected(
-                request=iotshadow.GetShadowSubscriptionRequest(thing_name=thing_name),
-                qos=qos,
-                callback=self.on_get_shadow_rejected,
-            )
-
-            # Wait for subscriptions to succeed
-            get_accepted_subscribed_future.result()
-            get_rejected_subscribed_future.result()
-
-            # The rest of the sample runs asyncronously.
+            self.__subscribe_update_shadow()
+            self.__subscribe_get_shadow()
 
             # Issue request for shadow's current state.
             # The response will be received by the on_get_accepted() callback
             logger.debug("Requesting current shadow state...")
-            publish_get_future = self.client.publish_get_shadow(
-                request=iotshadow.GetShadowRequest(thing_name=thing_name), qos=qos
-            )
-
-            # Ensure that publish succeeds
-            publish_get_future.result()
+            self.client.publish_get_shadow(
+                request=iotshadow.GetShadowRequest(thing_name=thing_name),
+                qos=qos,
+            ).result()
 
         except Exception as e:
             logger.error(format_exc())
             raise (e)
+
+    def __subscribe_update_shadow(self) -> None:
+        logger.debug("Subscribing to Update responses...")
+        request = iotshadow.UpdateShadowSubscriptionRequest(thing_name=self.thing_name)
+        accepted_future, _ = self.client.subscribe_to_update_shadow_accepted(
+            request=request,
+            qos=self.qos,
+            callback=self.on_update_shadow_accepted,
+        )
+
+        rejected_future, _ = self.client.subscribe_to_update_shadow_rejected(
+            request=request,
+            qos=self.qos,
+            callback=self.on_update_shadow_rejected,
+        )
+
+        accepted_future.result()
+        rejected_future.result()
+
+    def __subscribe_get_shadow(self) -> None:
+        logger.debug("Subscribing to Get responses...")
+        request = iotshadow.GetShadowSubscriptionRequest(thing_name=self.thing_name)
+        accepted_future, _ = self.client.subscribe_to_get_shadow_accepted(
+            request=request,
+            qos=self.qos,
+            callback=self.on_get_shadow_accepted,
+        )
+
+        rejected_future, _ = self.client.subscribe_to_get_shadow_rejected(
+            request=request,
+            qos=self.qos,
+            callback=self.on_get_shadow_rejected,
+        )
+
+        accepted_future.result()
+        rejected_future.result()
 
     def on_get_shadow_accepted(self, response):
         # type: (iotshadow.GetShadowResponse) -> None

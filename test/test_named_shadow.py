@@ -6,14 +6,14 @@ from awsiotclient import named_shadow
 from .common import init_connection
 
 
-class TestClassicShadow(unittest.TestCase):
+class TestNamedShadow(unittest.TestCase):
     THING_NAME = "awsiotclient-test"
 
     def setUp(self):
         self.device_conn = init_connection("device")
         self.app_conn = init_connection("app")
 
-    def test_classic_shadow_reported(self):
+    def test_named_shadow_reported(self):
         client = named_shadow.client(
             connection=self.device_conn,
             thing_name=self.THING_NAME,
@@ -22,7 +22,7 @@ class TestClassicShadow(unittest.TestCase):
 
         client.change_reported_value({"hoge": "piyo"}).result()
 
-    def test_classic_shadow_reported_value_delta(self):
+    def test_named_shadow_reported_value_delta(self):
         SHADOW_PROPERTY = "test-shadow-reported-delta-1"
 
         incoming = False
@@ -53,7 +53,7 @@ class TestClassicShadow(unittest.TestCase):
         while not incoming:
             sleep(0.1)
 
-    def test_classic_shadow_desired_matches_with_reported(self):
+    def test_named_shadow_desired_matches_with_reported(self):
         SHADOW_PROPERTY = "test-shadow-reported-delta-2"
 
         incoming = False

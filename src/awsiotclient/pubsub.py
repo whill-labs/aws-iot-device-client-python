@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, Optional
 
 from awscrt import mqtt
 
-from awsiotclient import get_module_logger
+from . import get_module_logger
 
 logger = get_module_logger(__name__)
 

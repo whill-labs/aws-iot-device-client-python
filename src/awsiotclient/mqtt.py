@@ -123,9 +123,7 @@ def init(params: ConnectionParams) -> mqtt.Connection:
         )
 
     logger.debug(
-        "Connecting to {} with client ID '{}'...".format(
-            params.endpoint, params.client_id
-        )
+        f"Connecting to {params.endpoint} with client ID '{params.client_id}'..."
     )
 
     return mqtt_connection
