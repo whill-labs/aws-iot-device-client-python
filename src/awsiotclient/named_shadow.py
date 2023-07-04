@@ -1,69 +1,53 @@
-import threading
 from concurrent.futures import Future
 from traceback import format_exc
-from typing import Any, Callable, Dict, Optional
+from typing import Callable
 
 from awscrt import mqtt
 from awsiot import iotshadow
 
-from . import ExceptionAwsIotClient, dictdiff, get_module_logger
+from . import get_module_logger
+from .shadow import (
+    done_future,
+    ShadowDocument,
+    ExceptionAwsIotShadow,
+    ExceptionAwsIotShadowInvalidDelta,
+    ShadowClientCommon,
+)
 
 logger = get_module_logger(__name__)
-ShadowDocument = Optional[Dict[str, Any]]
+
+ExceptionAwsIotClassicShadow = ExceptionAwsIotShadow
+ExceptionAwsIotClassicShadowInvalidDelta = ExceptionAwsIotShadowInvalidDelta
 
 
-class ExceptionAwsIotNamedShadow(ExceptionAwsIotClient):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
-
-class ExceptionAwsIotNamedShadowInvalidDelta(ExceptionAwsIotNamedShadow):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
-
-
-def empty_func(thing_name: str, shadow_name: str, value: Dict[str, Any]) -> None:
+def empty_func(thing_name: str, shadow_name: str, value: ShadowDocument) -> None:
     logger.debug(
         f"empty func. thing_name: {thing_name}, shadow_name: {shadow_name}, value: {value}"
     )
 
 
-def done_future() -> "Future[None]":
-    future: "Future[None]" = Future()
-    future.set_result(None)
-    return future
-
-
-SHADOW_VALUE_DEFAULT = None
-
-
-class LockedData:
-    def __init__(self) -> None:
-        self.lock: threading.Lock = threading.Lock()
-        self.reported_value: ShadowDocument = None
-        self.desired_value: ShadowDocument = None
-        self.disconnect_called: bool = False
-
-
-class client:
+class client(ShadowClientCommon):
     def __init__(
         self,
         connection: mqtt.Connection,
         thing_name: str,
         shadow_name: str,
         qos: mqtt.QoS = mqtt.QoS.AT_LEAST_ONCE,
-        delta_func: Callable[[str, str, Dict[str, Any]], None] = empty_func,
-        desired_func: Callable[[str, str, Dict[str, Any]], None] = empty_func,
+        delta_func: Callable[[str, str, ShadowDocument], None] = empty_func,
+        desired_func: Callable[[str, str, ShadowDocument], None] = empty_func,
         publish_full_doc: bool = False,
     ) -> None:
-        self.client = iotshadow.IotShadowClient(connection)
-        self.thing_name = thing_name
+        super().__init__(
+            connection=connection,
+            thing_name=thing_name,
+            property_name=None,
+            qos=qos,
+            delta_func=delta_func,
+            desired_func=desired_func,
+            publish_full_doc=publish_full_doc,
+        )
+
         self.shadow_name = shadow_name
-        self.locked_data = LockedData()
-        self.delta_func = delta_func
-        self.desired_func = desired_func
-        self.qos = qos
-        self.publish_full_doc = publish_full_doc
         try:
             # Subscribe to necessary topics.
             # Note that **is** important to wait for "accepted/rejected" subscriptions
@@ -138,244 +122,25 @@ class client:
         accepted_future.result()
         rejected_future.result()
 
-    def on_get_shadow_accepted(self, response):
-        # type: (iotshadow.GetNamedShadowResponse) -> None
-        try:
-            logger.debug("Finished getting initial shadow state.")
-            with self.locked_data.lock:
-                if self.locked_data.reported_value is not None:
-                    logger.debug(
-                        "  Ignoring initial query because a delta event has already been received."
-                    )
-                    return
+    def label(self) -> str:
+        return self.shadow_name
 
-            if response.state:
-                if response.state.delta:
-                    value = response.state.delta
-                    if value:
-                        logger.debug(
-                            "  Named Shadow contains delta value '{}'.".format(value)
-                        )
-                        return
-
-                if response.state.reported:
-                    value = response.state.reported
-                    if value:
-                        logger.debug(
-                            "  Named Shadow contains reported value '{}'.".format(value)
-                        )
-                        self.set_local_value_due_to_initial_query(
-                            response.state.reported
-                        )
-                        return
-
-            logger.debug(
-                "  Named Shadow document lacks '{}' state. Setting defaults...".format(
-                    self.shadow_name
-                )
-            )
-            self.change_reported_value(SHADOW_VALUE_DEFAULT)
-            return
-
-        except Exception as e:
-            logger.error(format_exc())
-            raise (e)
-
-    def on_get_shadow_rejected(self, error):
-        # type: (iotshadow.ErrorResponse) -> None
-        if error.code == 404:
-            logger.debug("Thing has no shadow document. Creating with defaults...")
-            self.change_reported_value(SHADOW_VALUE_DEFAULT)
-        else:
-            raise ExceptionAwsIotNamedShadow(
-                "Get request was rejected. code:{} message:'{}'".format(
-                    error.code, error.message
-                )
-            )
-
-    def on_shadow_delta_updated(self, delta):
-        # type: (iotshadow.NamedShadowDeltaUpdatedEvent) -> None
-        try:
-            logger.debug("Received shadow delta event.")
-            if delta.state:
-                value = delta.state
-                if value is None:
-                    logger.debug(
-                        "  Delta reports that '{}' was deleted. Resetting defaults...".format(
-                            self.shadow_name
-                        )
-                    )
-                    self.change_reported_value(SHADOW_VALUE_DEFAULT)
-                    return
-                else:
-                    logger.debug(
-                        "  Delta reports that desired value is '{}'. Invoke delta func...".format(
-                            value
-                        )
-                    )
-                    try:
-                        self.delta_func(self.thing_name, self.shadow_name, value)
-                    except ExceptionAwsIotNamedShadowInvalidDelta:
-                        logger.debug(
-                            f"  Delta reports invalid request in {self.shadow_name}. Resetting defaults..."
-                        )
-                        for key in value:
-                            value[key] = None
-                        self.change_desired_value(value)
-
-            else:
-                logger.debug(
-                    "  Delta did not report a change in '{}'".format(self.shadow_name)
-                )
-
-        except Exception as e:
-            logger.error(format_exc())
-            raise (e)
-
-    def on_publish_update_named_shadow(self, future: Future) -> None:  # type: ignore
-        try:
-            future.result()
-            logger.debug("Update request published.")
-        except Exception as e:
-            logger.error(format_exc())
-            logger.error("Failed to publish update request.")
-            raise (e)
-
-    def on_update_shadow_accepted(self, response):
-        # type: (iotshadow.UpdateNamedShadowResponse) -> None
-        try:
-            if response.state.reported:
-                logger.debug(
-                    "Finished updating reported shadow value to '{}'.".format(
-                        response.state.reported
-                    )
-                )
-            if response.state.desired:
-                new_value: Dict[str, Any] = response.state.desired
-                self.locked_data.desired_value = new_value
-                self.desired_func(self.thing_name, self.shadow_name, new_value)
-                logger.debug(
-                    "Finished updating desired shadow value to '{}'.".format(
-                        response.state.desired
-                    )
-                )
-        except Exception as e:
-            logger.error(format_exc())
-            logger.error("Updated shadow is missing the target property.")
-            raise (e)
-
-    def on_update_shadow_rejected(self, error):
-        # type: (iotshadow.ErrorResponse) -> None
-        errstr = "Update request was rejected. code:{} message:'{}'".format(
-            error.code, error.message
-        )
-        logger.error(errstr)
-        raise ExceptionAwsIotNamedShadow(errstr)
-
-    def set_local_value_due_to_initial_query(
-        self, reported_value: ShadowDocument
-    ) -> None:
-        with self.locked_data.lock:
-            self.locked_data.reported_value = reported_value
-
-    def change_reported_value(self, value: ShadowDocument) -> "Future[None]":
-        with self.locked_data.lock:
-            if self.locked_data.reported_value == value:
-                logger.debug("Local value is already '{}'.".format(value))
-                return done_future()
-
-            if self.publish_full_doc:
-                reported = value
-            else:
-                reported = dictdiff.dictdiff(self.locked_data.reported_value, value)
-            logger.debug("Changed local shadow value to '{}'.".format(value))
-            self.locked_data.reported_value = value
-
-        logger.debug("Updating reported shadow value to '{}'...".format(reported))
-        request = iotshadow.UpdateNamedShadowRequest(
-            thing_name=self.thing_name,
-            shadow_name=self.shadow_name,
-            state=iotshadow.ShadowState(
-                reported=reported,
-            ),
-        )
-        future: "Future[None]" = self.client.publish_update_named_shadow(
-            request, self.qos
-        )
-        future.add_done_callback(self.on_publish_update_named_shadow)
-
-        return future
-
-    def change_desired_value(self, value: ShadowDocument) -> "Future[None]":
-        with self.locked_data.lock:
-            if self.locked_data.desired_value == value:
-                logger.debug("Local desired value is already '{}'.".format(value))
-                return done_future()
-            if self.publish_full_doc:
-                desired = value
-            else:
-                desired = dictdiff.dictdiff(self.locked_data.desired_value, value)
-            logger.debug("Changed local desired value to '{}'.".format(value))
-            self.locked_data.desired_value = value
-
-        logger.debug("Updating desired shadow value to '{}'...".format(desired))
-        request = iotshadow.UpdateNamedShadowRequest(
-            thing_name=self.thing_name,
-            shadow_name=self.shadow_name,
-            state=iotshadow.ShadowState(
-                desired=desired,
-            ),
-        )
-        future: "Future[None]" = self.client.publish_update_named_shadow(
-            request, self.qos
-        )
-        future.add_done_callback(self.on_publish_update_named_shadow)
-
-        return future
-
-    def change_both_values(
-        self, desired_value: ShadowDocument, reported_value: ShadowDocument
+    def update_shadow_request(
+        self, desired: ShadowDocument, reported: ShadowDocument
     ) -> "Future[None]":
-        with self.locked_data.lock:
-            if (
-                self.locked_data.desired_value == desired_value
-                and self.locked_data.reported_value == reported_value
-            ):
-                logger.debug("Both of desired and reported values are unchanged.")
-                return done_future()
-            if self.publish_full_doc:
-                desired = desired_value
-                reported = reported_value
-            else:
-                desired = dictdiff.dictdiff(
-                    self.locked_data.desired_value, desired_value
-                )
-                reported = dictdiff.dictdiff(
-                    self.locked_data.reported_value, reported_value
-                )
-            logger.debug("Changed local desired value to '{}'.".format(desired_value))
-            self.locked_data.desired_value = desired_value
-            logger.debug("Changed local reported value to '{}'.".format(reported_value))
-            self.locked_data.reported_value = reported_value
+        if desired is None and reported is None:
+            return done_future()
 
-        logger.debug("Updating desired shadow value to '{}'...".format(desired))
         request = iotshadow.UpdateNamedShadowRequest(
             thing_name=self.thing_name,
             shadow_name=self.shadow_name,
             state=iotshadow.ShadowState(
-                desired=desired,
                 reported=reported,
+                desired=desired,
             ),
         )
         future: "Future[None]" = self.client.publish_update_named_shadow(
             request, self.qos
         )
-        future.add_done_callback(self.on_publish_update_named_shadow)
-
+        future.add_done_callback(self.on_publish_update_shadow)
         return future
-
-    def get_reported_value(self) -> ShadowDocument:
-        return self.locked_data.reported_value
-
-    def get_desired_value(self) -> ShadowDocument:
-        return self.locked_data.desired_value
