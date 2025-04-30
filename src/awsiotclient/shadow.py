@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Lock
 from traceback import format_exc
 from typing import Any, Callable, Dict, Optional, Tuple, Union
@@ -59,8 +59,8 @@ class DocumentTracker:
 @dataclass
 class ShadowData:
     _lock: Lock = Lock()
-    _desired_value: DocumentTracker = DocumentTracker()
-    _reported_value: DocumentTracker = DocumentTracker()
+    _desired_value: DocumentTracker = field(default_factory=DocumentTracker)
+    _reported_value: DocumentTracker = field(default_factory=DocumentTracker)
 
     def get_desired_value(self) -> ShadowDocument:
         with self._lock:
