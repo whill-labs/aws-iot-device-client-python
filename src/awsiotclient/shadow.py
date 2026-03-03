@@ -58,7 +58,7 @@ class DocumentTracker:
 
 @dataclass
 class ShadowData:
-    _lock: Lock = Lock()
+    _lock: Lock = field(default_factory=Lock)
     _desired_value: DocumentTracker = field(default_factory=DocumentTracker)
     _reported_value: DocumentTracker = field(default_factory=DocumentTracker)
 
