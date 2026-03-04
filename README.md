@@ -108,6 +108,12 @@ job_client = jobs.client(
 # <wait until the client receives job>
 ```
 
+## Development
+
+### Why `poetry.lock` is not committed
+
+This is a library, not an application. Users resolve dependencies via `pyproject.toml` constraints, so a lock file provides no benefit to them. Additionally, we support Python 3.8–3.14, and a single lock file cannot cover all versions. CI runs `poetry lock` on each build to test against the latest compatible dependencies.
+
 ## License
 
 This library is licensed under the Apache 2.0 License.
