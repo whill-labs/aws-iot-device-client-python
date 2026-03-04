@@ -106,7 +106,7 @@ class ShadowClientCommon(ABC):
     client: iotshadow.IotShadowClient
     thing_name: str
     property_name: Optional[str]
-    locked_data = ShadowData()
+    locked_data: ShadowData
     qos: mqtt.QoS
     publish_full_doc: bool
 
@@ -127,6 +127,7 @@ class ShadowClientCommon(ABC):
         self.delta_func = delta_func
         self.desired_func = desired_func
         self.publish_full_doc = publish_full_doc
+        self.locked_data = ShadowData()
 
     def __filter_property(self, v: ShadowDocument) -> ShadowDocument:
         if self.property_name is None:
