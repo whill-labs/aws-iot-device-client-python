@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
+from copy import deepcopy
 from dataclasses import dataclass, field
 from threading import Lock
 from traceback import format_exc
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from awscrt import mqtt
 from awsiot import iotshadow
@@ -55,6 +56,16 @@ class DocumentTracker:
         self.set(new)
         return value
 
+    def merge(self, patch: Any) -> ShadowDocument:
+        """Apply a partial update as the Device Shadow service does."""
+        if isinstance(patch, dict) and (
+            self._current is None or isinstance(self._current, dict)
+        ):
+            self._current = dictdiff.dictmerge(self._current, patch)
+        else:
+            self._current = deepcopy(patch)
+        return deepcopy(self._current)
+
 
 @dataclass
 class ShadowData:
@@ -75,6 +86,10 @@ class ShadowData:
     ) -> ShadowDocument:
         with self._lock:
             return self._desired_value.update(value, not publish_full_doc)
+
+    def merge_desired_value(self, patch: Any) -> ShadowDocument:
+        with self._lock:
+            return self._desired_value.merge(patch)
 
     def get_reported_value(self) -> ShadowDocument:
         with self._lock:
@@ -106,7 +121,7 @@ class ShadowClientCommon(ABC):
     client: iotshadow.IotShadowClient
     thing_name: str
     property_name: Optional[str]
-    locked_data = ShadowData()
+    locked_data: ShadowData
     qos: mqtt.QoS
     publish_full_doc: bool
 
@@ -127,44 +142,57 @@ class ShadowClientCommon(ABC):
         self.delta_func = delta_func
         self.desired_func = desired_func
         self.publish_full_doc = publish_full_doc
+        self.locked_data = ShadowData()
 
     def __filter_property(self, v: ShadowDocument) -> ShadowDocument:
-        if self.property_name is None:
+        if self.property_name is None or v is None:
             return v
         return v.get(self.property_name)
 
+    def __wrap_property(self, v: ShadowDocument) -> ShadowDocument:
+        if self.property_name is None or v is None:
+            return v
+        return {self.property_name: v}
+
     def label(self) -> str:
-        return self.property_name
+        return self.property_name or ""
 
     def on_shadow_delta_updated(self, delta: iotshadow.ShadowDeltaUpdatedEvent) -> None:
         logger.debug("Received shadow delta event.")
-        if not delta.state:
+        value = self.__filter_property(delta.state) if delta.state else None
+        if value is None:
+            # A delta lists every desired key that differs from reported, so on
+            # a shared classic shadow it may only concern other properties.
             logger.debug(f"  Delta did not report a change in '{self.label()}'")
             return
 
-        value = self.__filter_property(delta.state)
+        self.__handle_delta(value)
 
+    def __handle_delta(self, value: Dict[str, Any]) -> None:
         try:
-            if value is None:
+            logger.debug(
+                f"  Delta reports that desired value is '{value}'. Invoke delta func..."
+            )
+            try:
+                self.delta_func(self.thing_name, self.label(), value)
+            except ExceptionAwsIotShadowInvalidDelta:
                 logger.debug(
-                    f"  Delta reports that '{self.label()}' was deleted. Resetting defaults..."
+                    f"  Delta reports invalid request in {self.label()}. Resetting defaults..."
                 )
-                self.change_reported_value(SHADOW_VALUE_DEFAULT)
-                return
-            else:
-                logger.debug(
-                    f"  Delta reports that desired value is '{value}'. Invoke delta func..."
-                )
-                try:
-                    self.delta_func(self.thing_name, self.label(), value)
-                except ExceptionAwsIotShadowInvalidDelta:
-                    logger.debug(
-                        f"  Delta reports invalid request in {self.label()}. Resetting defaults..."
-                    )
-                    self.change_desired_value(SHADOW_VALUE_DEFAULT)
+                self.__clear_desired(value)
         except Exception as e:
             logger.error(format_exc())
             raise (e)
+
+    def __clear_desired(self, delta: Dict[str, Any]) -> "Future[None]":
+        # Deleting the requested keys removes the delta. The local desired value
+        # follows through on_update_shadow_accepted.
+        desired: Dict[str, Any]
+        if self.property_name is None:
+            desired = {k: None for k in delta}
+        else:
+            desired = {self.property_name: None}
+        return self._publish_update(desired=desired, reported=None)
 
     def on_get_shadow_accepted(self, response: iotshadow.GetShadowResponse) -> None:
         logger.debug("Finished getting initial shadow state.")
@@ -175,24 +203,26 @@ class ShadowClientCommon(ABC):
             return
 
         try:
-            if response.state:
-                if response.state.delta:
-                    value = self.__filter_property(response.state.delta)
-                    if value:
-                        logger.debug(f"  Shadow contains delta value '{value}'.")
-                        return
+            state = response.state
+            if state is None:
+                state = iotshadow.ShadowStateWithDelta()
 
-                if response.state.reported:
-                    value = self.__filter_property(response.state.reported)
-                    if value:
-                        logger.debug(f"  Shadow contains reported value '{value}'.")
-                        self.locked_data.set_reported_value(value)
-                        return
+            self.locked_data.set_desired_value(self.__filter_property(state.desired))
 
-            logger.debug(
-                f"  Shadow document lacks '{self.label()}' property. Setting defaults..."
-            )
-            self.change_reported_value(SHADOW_VALUE_DEFAULT)
+            reported = self.__filter_property(state.reported)
+            if reported is not None:
+                logger.debug(f"  Shadow contains reported value '{reported}'.")
+                self.locked_data.set_reported_value(reported)
+            else:
+                logger.debug(
+                    f"  Shadow document lacks '{self.label()}' property. Setting defaults..."
+                )
+                self.change_reported_value(SHADOW_VALUE_DEFAULT)
+
+            delta = self.__filter_property(state.delta)
+            if delta is not None:
+                logger.debug(f"  Shadow contains delta value '{delta}'.")
+                self.__handle_delta(delta)
 
         except Exception as e:
             logger.error(format_exc())
@@ -213,12 +243,18 @@ class ShadowClientCommon(ABC):
                 logger.debug(
                     f"Finished updating reported shadow value to '{response.state.reported}'."
                 )
-            if response.state.desired:
-                logger.debug(
-                    f"Finished updating desired shadow value to '{response.state.desired}'."
-                )
-                self.locked_data.set_desired_value(response.state.desired)
-                self.desired_func(self.thing_name, self.label(), response.state.desired)
+            desired = response.state.desired
+            if not desired:
+                return
+            if self.property_name is not None and self.property_name not in desired:
+                return  # Update of another property on a shared classic shadow
+
+            # The response only echoes the request, which may be a difference.
+            value = self.locked_data.merge_desired_value(
+                self.__filter_property(desired)
+            )
+            logger.debug(f"Finished updating desired shadow value to '{value}'.")
+            self.desired_func(self.thing_name, self.label(), value)
         except Exception as e:
             logger.error(format_exc())
             logger.error("Updated shadow is missing the target property.")
@@ -240,10 +276,21 @@ class ShadowClientCommon(ABC):
             raise (e)
 
     @abstractmethod
+    def _publish_update(
+        self, desired: ShadowDocument, reported: ShadowDocument
+    ) -> "Future[None]":
+        """Publish an update request whose state sections are already complete."""
+
     def update_shadow_request(
         self, desired: ShadowDocument, reported: ShadowDocument
     ) -> "Future[None]":
-        pass
+        if desired is None and reported is None:
+            return done_future()
+
+        return self._publish_update(
+            desired=self.__wrap_property(desired),
+            reported=self.__wrap_property(reported),
+        )
 
     def change_reported_value(self, value: ShadowDocument) -> "Future[None]":
         reported = self.locked_data.update_reported_value(value, self.publish_full_doc)

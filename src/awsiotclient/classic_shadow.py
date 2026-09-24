@@ -7,11 +7,10 @@ from awsiot import iotshadow
 
 from . import get_module_logger
 from .shadow import (
-    done_future,
-    ShadowDocument,
     ExceptionAwsIotShadow,
     ExceptionAwsIotShadowInvalidDelta,
     ShadowClientCommon,
+    ShadowDocument,
 )
 
 logger = get_module_logger(__name__)
@@ -112,15 +111,9 @@ class client(ShadowClientCommon):
         accepted_future.result()
         rejected_future.result()
 
-    def update_shadow_request(
+    def _publish_update(
         self, desired: ShadowDocument, reported: ShadowDocument
     ) -> "Future[None]":
-        if desired is None and reported is None:
-            return done_future()
-
-        desired = None if desired is None else {self.property_name: desired}
-        reported = None if reported is None else {self.property_name: reported}
-
         request = iotshadow.UpdateShadowRequest(
             thing_name=self.thing_name,
             state=iotshadow.ShadowState(
