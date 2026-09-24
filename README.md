@@ -6,7 +6,7 @@ The AWS IoT Device Client provides device-side functionality for AWS IoT service
 
 ### Minimum Requirements
 
-- Python 3.7.1+
+- Python 3.8+ (kept for ROS Noetic)
 
 ### Install from PyPI
 
@@ -107,6 +107,17 @@ job_client = jobs.client(
 )
 # <wait until the client receives job>
 ```
+
+## Development
+
+```shell
+poetry install
+poetry run pytest test/unit
+```
+
+See [test/README.md](test/README.md) for how the tests are organized and how to run the E2E tests against AWS IoT.
+
+`poetry.lock` is not committed. This is a library, so users resolve dependencies from the constraints in `pyproject.toml`, and a single lock file cannot cover every supported Python version. CI therefore tests against the latest compatible dependencies, and a separate job tests the oldest supported `awsiotsdk` on Ubuntu 20.04 / Python 3.8.
 
 ## License
 
