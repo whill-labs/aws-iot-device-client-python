@@ -1,5 +1,5 @@
-!test/certs/AmazonRootCA1.pem
-test/certs/*
+test/e2e/certs/*
+!test/e2e/certs/AmazonRootCA1.pem
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
