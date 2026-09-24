@@ -26,6 +26,14 @@ class ExceptionAwsIotShadowInvalidDelta(ExceptionAwsIotShadow):
         super().__init__(*args)
 
 
+def deletion_patch(delta: Dict[str, Any]) -> Dict[str, Any]:
+    """An update that deletes exactly the leaves listed in ``delta``."""
+    return {
+        k: deletion_patch(v) if isinstance(v, dict) and v else None
+        for k, v in delta.items()
+    }
+
+
 def done_future() -> "Future[None]":
     future: "Future[None]" = Future()
     future.set_result(None)
@@ -160,9 +168,10 @@ class ShadowClientCommon(ABC):
     def on_shadow_delta_updated(self, delta: iotshadow.ShadowDeltaUpdatedEvent) -> None:
         logger.debug("Received shadow delta event.")
         value = self.__filter_property(delta.state) if delta.state else None
-        if value is None:
+        if value is None or value == {}:
             # A delta lists every desired key that differs from reported, so on
-            # a shared classic shadow it may only concern other properties.
+            # a shared classic shadow it may only concern other properties. An
+            # empty object is what deleting all of its keys may leave behind.
             logger.debug(f"  Delta did not report a change in '{self.label()}'")
             return
 
@@ -184,33 +193,35 @@ class ShadowClientCommon(ABC):
             logger.error(format_exc())
             raise (e)
 
-    def __clear_desired(self, delta: Dict[str, Any]) -> "Future[None]":
-        # Deleting the requested keys removes the delta. The local desired value
-        # follows through on_update_shadow_accepted.
-        desired: Dict[str, Any]
-        if self.property_name is None:
-            desired = {k: None for k in delta}
-        else:
-            desired = {self.property_name: None}
-        return self._publish_update(desired=desired, reported=None)
+    def __clear_desired(self, delta: Any) -> "Future[None]":
+        # Deleting the rejected leaves removes the delta and keeps the rest of
+        # the desired value. The local desired value follows through
+        # on_update_shadow_accepted.
+        patch = deletion_patch(delta) if isinstance(delta, dict) else None
+        if self.property_name is not None:
+            patch = {self.property_name: patch}
+        return self._publish_update(desired=patch, reported=None)
 
     def on_get_shadow_accepted(self, response: iotshadow.GetShadowResponse) -> None:
         logger.debug("Finished getting initial shadow state.")
-        if self.locked_data.get_reported_value() is not None:
-            logger.debug(
-                "  Ignoring initial query because a delta event has already been received."
-            )
-            return
-
         try:
             state = response.state
             if state is None:
                 state = iotshadow.ShadowStateWithDelta()
 
-            self.locked_data.set_desired_value(self.__filter_property(state.desired))
+            # The response may arrive after the application already changed
+            # values; those are newer than the response.
+            if self.locked_data.get_desired_value() is None:
+                self.locked_data.set_desired_value(
+                    self.__filter_property(state.desired)
+                )
 
             reported = self.__filter_property(state.reported)
-            if reported is not None:
+            if self.locked_data.get_reported_value() is not None:
+                logger.debug(
+                    "  Keeping the reported value set before the initial query returned."
+                )
+            elif reported is not None:
                 logger.debug(f"  Shadow contains reported value '{reported}'.")
                 self.locked_data.set_reported_value(reported)
             else:
@@ -220,7 +231,7 @@ class ShadowClientCommon(ABC):
                 self.change_reported_value(SHADOW_VALUE_DEFAULT)
 
             delta = self.__filter_property(state.delta)
-            if delta is not None:
+            if delta is not None and delta != {}:
                 logger.debug(f"  Shadow contains delta value '{delta}'.")
                 self.__handle_delta(delta)
 

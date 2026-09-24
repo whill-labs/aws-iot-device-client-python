@@ -281,8 +281,9 @@ def compute_delta(desired: Dict[str, Any], reported: Dict[str, Any]) -> Dict[str
 class FakeShadowService(FakeService):
     """Device Shadow service for classic and named shadows.
 
-    Approximation: a delta message is published only when an accepted update
-    touched the desired section and a delta remains afterwards.
+    Approximations: a delta message is published only when an accepted update
+    touched the desired section and a delta remains afterwards, and an object
+    whose keys were all deleted stays behind as ``{}``.
     """
 
     _TOPIC = re.compile(r"^\$aws/things/([^/]+)/shadow(?:/name/([^/]+))?/(get|update)$")
@@ -290,6 +291,21 @@ class FakeShadowService(FakeService):
     def __init__(self) -> None:
         super().__init__()
         self._shadows: Dict[Tuple[str, Optional[str]], Dict[str, Any]] = {}
+        self._held_gets: Optional[List[Message]] = None
+
+    def hold_get_responses(self) -> None:
+        """Keep get responses back until release_get_responses() is called.
+
+        Clients only wait for the get request to be sent, so its response may
+        arrive after the application has already changed values.
+        """
+        with self._cond:
+            self._held_gets = []
+
+    def release_get_responses(self) -> None:
+        with self._cond:
+            held, self._held_gets = self._held_gets or [], None
+        self._publish(held)
 
     @staticmethod
     def base_topic(thing_name: str, shadow_name: Optional[str] = None) -> str:
@@ -336,7 +352,12 @@ class FakeShadowService(FakeService):
             error.setdefault("timestamp", int(time.time()))
             return [(f"{topic}/rejected", _encode(error))]
         if operation == "get":
-            return self._get(thing_name, shadow_name, request)
+            responses = self._get(thing_name, shadow_name, request)
+            with self._cond:
+                if self._held_gets is not None:
+                    self._held_gets.extend(responses)
+                    return []
+            return responses
         return self._update(thing_name, shadow_name, request)
 
     def _get(

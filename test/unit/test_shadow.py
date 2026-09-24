@@ -150,6 +150,24 @@ class TestInitialization:
         errors = broker.take_callback_errors()
         assert len(errors) == 1 and isinstance(errors[0], ExceptionAwsIotClient)
 
+    def test_pending_delta_survives_a_late_get_response(
+        self, kind, broker, shadow_service, connection
+    ):
+        shadow_service.update(THING, kind.shadow_name, desired=kind.wrap({"a": 1}))
+        shadow_service.hold_get_responses()
+        delta_func = Recorder()
+        client = kind.make(connection, delta_func=delta_func)
+
+        client.change_reported_value({"a": 0, "b": 0}).result()
+        shadow_service.release_get_responses()
+
+        assert delta_func.values == [{"a": 1}]
+        client.change_reported_value({"a": 0, "b": 0}).result()
+        assert kind.cloud(shadow_service, "reported") == {
+            "a": 0,
+            "b": 0,
+        }, "a late get must not replace the newer reported value"
+
     def test_subscription_failure_is_raised(
         self, kind, broker, shadow_service, connection
     ):
@@ -322,6 +340,22 @@ class TestDelta:
 
         assert kind.cloud(shadow_service, "delta") is None
         assert kind.cloud(shadow_service, "reported") == {"a": 1}
+
+    def test_invalid_delta_keeps_the_valid_part_of_the_desired_value(
+        self, kind, broker, shadow_service, connection
+    ):
+        def reject(thing_name: str, label: str, value: Any) -> None:
+            raise ExceptionAwsIotShadowInvalidDelta(value)
+
+        client = kind.make(connection, delta_func=reject)
+        client.change_both_values(
+            {"config": {"a": 1}}, {"config": {"a": 1, "b": 0}}
+        ).result()
+
+        set_desired_elsewhere(shadow_service, kind, {"config": {"a": 1, "b": 2}})
+
+        assert kind.cloud(shadow_service, "delta") is None
+        assert kind.cloud(shadow_service, "desired") == {"config": {"a": 1}}
 
     def test_delta_accepted_after_an_invalid_one(
         self, kind, broker, shadow_service, connection
