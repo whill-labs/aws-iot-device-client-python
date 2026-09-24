@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# E2E tests (test/e2e) need a real AWS IoT account and are run locally only.
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6 # GitHub official
+      - uses: actions/setup-python@v6 # GitHub official
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pipx install poetry
+          poetry install
+      - run: poetry run black --check src test
+      - run: poetry run isort --check-only --diff src test
+      - run: poetry run flake8 src test
+      - run: poetry run mypy src
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v6 # GitHub official
+      - uses: actions/setup-python@v6 # GitHub official
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        # Recent virtualenv (used by Poetry) can no longer create Python 3.8
+        # environments, so create the venv with the standard library instead.
+        run: |
+          python -m venv .venv
+          pipx install poetry
+          poetry config virtualenvs.in-project true
+          poetry install
+      - name: Unit tests
+        run: poetry run pytest test/unit --cov --cov-report=term-missing
+
+  # The oldest dependencies we claim to support, on the platform ROS Noetic
+  # runs on (Ubuntu 20.04, Python 3.8).
+  min-deps:
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
+    steps:
+      - name: Install system Python
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git openssl python3 python3-pip python3-venv
+      - uses: actions/checkout@v6 # GitHub official
+      - name: Install the oldest supported awsiotsdk
+        run: |
+          python3 -m venv /opt/venv
+          /opt/venv/bin/pip install --upgrade pip
+          /opt/venv/bin/pip install "awsiotsdk==1.5.11" pytest hypothesis
+          /opt/venv/bin/pip install --no-deps .
+      - name: Unit tests
+        run: /opt/venv/bin/python -m pytest test/unit -p no:cacheprovider
+
+  # Test the built wheel rather than the source tree.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6 # GitHub official
+      - uses: actions/setup-python@v6 # GitHub official
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: |
+          pipx install poetry
+          poetry build
+      - name: Install the wheel
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/*.whl pytest hypothesis
+          /tmp/venv/bin/python -c "import awsiotclient, sys; print(awsiotclient.__file__); sys.exit('site-packages' not in awsiotclient.__file__)"
+      - name: Unit tests
+        run: /tmp/venv/bin/python -m pytest test/unit -p no:cacheprovider

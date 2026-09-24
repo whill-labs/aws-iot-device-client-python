@@ -1,6 +1,5 @@
 import unittest
 
-
 from .common import init_connection
 
 

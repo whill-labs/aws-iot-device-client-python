@@ -1,5 +1,5 @@
-from pathlib import Path
 from os import environ
+from pathlib import Path
 from uuid import uuid4
 
 from awscrt.mqtt import Connection
