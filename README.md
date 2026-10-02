@@ -108,6 +108,19 @@ job_client = jobs.client(
 # <wait until the client receives job>
 ```
 
+## Development
+
+Install [uv](https://docs.astral.sh/uv/), then:
+
+```shell
+uv sync
+uv run pytest test/unit
+```
+
+See [test/README.md](test/README.md) for how the tests are organized and how to run the E2E tests against AWS IoT.
+
+`uv.lock` is not committed. This is a library, so users resolve dependencies from the constraints in `pyproject.toml`, not from a lock file. CI does the same and resolves the newest allowed dependencies on every run, so a new release that breaks users breaks CI too instead of being hidden by a lock file. A separate job tests the lowest allowed ones (`--resolution lowest-direct`) on Ubuntu 20.04 with Python 3.8.
+
 ## License
 
 This library is licensed under the Apache 2.0 License.
