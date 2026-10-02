@@ -38,3 +38,27 @@ def dictdiff(
             dst[k] = deepcopy(v2)  # Updated item
 
     return dst
+
+
+def dictmerge(
+    base: Optional[Dict[Any, Any]], patch: Optional[Dict[Any, Any]]
+) -> Optional[Dict[Any, Any]]:
+    """Apply ``patch`` to ``base`` the way the Device Shadow service does.
+
+    Nested dicts are merged recursively and a ``None`` value deletes the key.
+    This is the inverse of ``dictdiff``. Neither argument is modified.
+    """
+    if patch is None:
+        return deepcopy(base)
+
+    dst = deepcopy(base) if base else dict()
+    for k, v in patch.items():
+        if v is None:
+            dst.pop(k, None)
+        elif isinstance(v, dict):
+            current = dst.get(k)
+            dst[k] = dictmerge(current if isinstance(current, dict) else None, v)
+        else:
+            dst[k] = deepcopy(v)
+
+    return dst
