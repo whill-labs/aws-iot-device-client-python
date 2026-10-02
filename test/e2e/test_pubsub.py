@@ -21,7 +21,9 @@ class TestPubSub(unittest.TestCase):
             nonlocal count
             count += 1
 
-        _sub = pubsub.Subscriber(self.sub_conn, "test/topic", callback=callback)
+        self.subscriber = pubsub.Subscriber(
+            self.sub_conn, "test/topic", callback=callback
+        )  # noqa: F841 (keeps the subscription alive)
 
         pub = pubsub.Publisher(self.pub_conn, "test/topic")
         pub.publish({"hoge": "fuga"}).result()

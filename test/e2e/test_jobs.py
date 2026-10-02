@@ -3,10 +3,10 @@ from os import environ
 from time import sleep
 from uuid import uuid4
 
-from awsiotclient import jobs
 import boto3
 from botocore.config import Config
 
+from awsiotclient import jobs
 
 from .common import init_connection
 

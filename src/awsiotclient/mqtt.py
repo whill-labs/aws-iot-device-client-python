@@ -62,7 +62,7 @@ class ConnectionParams:
         root_ca: str = "~/.aws/cert/AmazonRootCA1.pem",
         cert: str = "~/.aws/cert/certificate.pem.crt",
         key: str = "~/.aws/cert/private.pem.key",
-        client_id: str = "mqtt-" + str(uuid4()),
+        client_id: Optional[str] = None,
         use_websocket: bool = False,
         proxy_host: Optional[str] = None,
         proxy_port: int = 8080,
@@ -72,7 +72,7 @@ class ConnectionParams:
         self.root_ca = expanduser(root_ca)
         self.cert = expanduser(cert)
         self.key = expanduser(key)
-        self.client_id = client_id
+        self.client_id = client_id if client_id is not None else f"mqtt-{uuid4()}"
         self.use_websocket = use_websocket
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
@@ -103,7 +103,7 @@ def init(params: ConnectionParams) -> mqtt.Connection:
             ca_filepath=params.root_ca,
             on_connection_interrupted=on_connection_interrupted,
             on_connection_resumed=on_connection_resumed,
-            clent_id=params.client_id,
+            client_id=params.client_id,
             clean_session=False,
             keep_alive_secs=6,
         )

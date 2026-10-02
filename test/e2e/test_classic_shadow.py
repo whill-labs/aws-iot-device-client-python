@@ -35,11 +35,13 @@ class TestClassicShadow(unittest.TestCase):
             nonlocal incoming
             incoming = True
 
-        device_client = classic_shadow.client(
-            connection=self.device_conn,
-            thing_name=self.THING_NAME,
-            shadow_property=SHADOW_PROPERTY,
-            delta_func=callback,
+        self.device_client = (
+            classic_shadow.client(  # noqa: F841 (keeps the subscriptions alive)
+                connection=self.device_conn,
+                thing_name=self.THING_NAME,
+                shadow_property=SHADOW_PROPERTY,
+                delta_func=callback,
+            )
         )
 
         app_client = classic_shadow.client(
@@ -62,14 +64,16 @@ class TestClassicShadow(unittest.TestCase):
             nonlocal incoming
             incoming = True
 
-        device_client = classic_shadow.client(
-            connection=self.device_conn,
-            thing_name=self.THING_NAME,
-            shadow_property=SHADOW_PROPERTY,
-            delta_func=callback,
+        self.device_client = (
+            classic_shadow.client(  # noqa: F841 (keeps the subscriptions alive)
+                connection=self.device_conn,
+                thing_name=self.THING_NAME,
+                shadow_property=SHADOW_PROPERTY,
+                delta_func=callback,
+            )
         )
 
-        device_client.change_reported_value({"hoge": "fuga"}).result()
+        self.device_client.change_reported_value({"hoge": "fuga"}).result()
 
         sleep(0.5)
 
