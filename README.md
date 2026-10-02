@@ -6,7 +6,7 @@ The AWS IoT Device Client provides device-side functionality for AWS IoT service
 
 ### Minimum Requirements
 
-- Python 3.7.1+
+- Python 3.8+ (kept for ROS Noetic)
 
 ### Install from PyPI
 
